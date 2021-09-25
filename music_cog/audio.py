@@ -1,5 +1,5 @@
 from nextcord.errors import ClientException
-from config import msg
+from utility import msg
 import youtube_dl
 import pafy
 import nextcord

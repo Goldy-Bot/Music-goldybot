@@ -5,7 +5,7 @@ import asyncio
 
 from goldy_func import *
 from goldy_utility import *
-import config.msg as msg
+import utility.msg as msg
 
 #Importing cog packages.
 import importlib
@@ -20,6 +20,8 @@ class music(commands.Cog, name="🧡🎻Music"):
         self.help_command_index = None #The position this cog will be placed in the help command.
 
         importlib.reload(audio)
+        importlib.reload(config)
+        importlib.reload(msg)
 
     @commands.command(aliases=["connect", "con"], description="Join and play song right away.", cmd_usage="!nick {nick_name}")
     async def join(self, ctx):
