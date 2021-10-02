@@ -14,5 +14,5 @@ A Music extenstion for Goldy Bot which includes Goldy Music and Goldy Radio. *Cu
 ## Read This Before Use!
 A copy of the Goldy Bot V3 [CDK](https://github.com/TGP-Projects/Goldy-Bot-V3#readme) is needed to test this cog. *(If you have no read access contact [Dev Goldy](https://github.com/THEGOLDENPRO))*
 
-**© Copyright (C) 2021 Goldy Bot Team**
+**© Copyright (C) 2021 Goldy Bot**
 
