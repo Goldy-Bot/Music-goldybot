@@ -3,8 +3,8 @@ import nextcord
 from nextcord.ext import commands
 import asyncio
 
-from goldy_func import *
-from goldy_utility import *
+from src.goldy_func import *
+from src.goldy_utility import *
 import utility.msg as msg
 
 #Importing cog packages.

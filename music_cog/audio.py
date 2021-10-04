@@ -4,7 +4,7 @@ import youtube_dl
 import pafy
 import nextcord
 
-import goldy_utility
+import src.goldy_utility as goldy_utility
 
 """
 Audio: The module that offers methods like playing audio and just vc join/leave functions.
