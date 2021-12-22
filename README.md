@@ -9,10 +9,10 @@
 ## What is it?
 A open source Music extenstion for Goldy Bot which includes Goldy Music and Goldy Radio. *Currrently in development as of now...*
 
-- [ ] ``!play {song name/link}`` command. **(Join and play song right away.)**
-- [ ] ``!resume`` command. **(Contiune playing song.)**
-- [ ] ``!pause`` command. **(Pause the song.)**
-- [ ] ``!join`` command. **(Join but don't play anything.)**
+- [ ] ``!play {song name/link}`` **: Join and play song right away.**
+- [ ] ``!resume`` **: Contiune playing song.**
+- [ ] ``!pause`` **: Pause the song.**
+- [ ] ``!join`` **: Join but don't play anything.**
 - [ ] *``More Coming Soon...``*
 
 ## Read This Before Use!
