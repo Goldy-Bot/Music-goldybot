@@ -1,22 +1,29 @@
+import asyncio
 from nextcord.errors import ClientException
 from src.utility import msg
 import youtube_dl
 import pafy
 import nextcord
 
-import src.goldy_utility as goldy_utility
+from src import goldy_func, goldy_error, goldy_cache
+
+from .platforms import youtube
+from . import msg as music_msg
+from .. import music as ext #Music Cog
+
+goldy_cache.main_cache_object["goldy_music"] = {}
 
 """
-Audio: The module that offers methods like playing audio and just vc join/leave functions.
+Audio: The module that offers methods like playing audio and vc join/leave functions.
 """
 
 class goldy():
 
     @staticmethod
     async def join_vc(ctx): #Goldy Bot joins the vc your connected to.
-        #Checks
+        #Checks if member is in vc.
         if ctx.author.voice == None:
-            await ctx.send((msg.music.error.you_not_in_vc).format(ctx.author.mention))
+            await ctx.send((music_msg.music.error.you_not_in_vc).format(ctx.author.mention))
             return False
 
         if not ctx.voice_client == None: #Checks if bot is already in another vc.
@@ -26,15 +33,16 @@ class goldy():
         if ctx.voice_client == None:
             await ctx.author.voice.channel.connect()
 
-        return True
+        return ctx.voice_client
 
     @staticmethod
     async def leave_vc(ctx): #Goldy Bot leaves the vc it is connected to.
         if not ctx.voice_client == None: #Disconnects if goldy bot is in a vc.
             ctx.voice_client.pause()
             await ctx.voice_client.disconnect()
+            return True
         else:
-            await ctx.send((msg.music.error.not_connected_to_vc).format(ctx.author.mention))
+            await ctx.send((music_msg.music.error.not_connected_to_vc).format(ctx.author.mention))
 
     class checks():
         @staticmethod
@@ -44,83 +52,112 @@ class goldy():
             else:
                 return True #Goldy is in vc.
 
+class song(): #Class that creates song object.
+    def __init__(self, ctx, url, stream_object):
+        self.ctx = ctx
+        self.url = url
+        self.platform = stream_object.platform
+        self.name = stream_object.title
+        self.duration = stream_object.duration
+        self.thumbnail = stream_object.thumbnail
+        self.stream_object = stream_object
+
 class queue():
-    def __init__(self, client):
-        self.song_queue = {}
+    def __init__(self, ctx):
+        self.ctx = ctx
+        try: #Test to see if cache exists.
+            goldy_cache.main_cache_object["goldy_music"][ctx.guild.id]
+            goldy_cache.main_cache_object["goldy_music"][ctx.guild.id]["song_queue"]
+        except KeyError:
+            goldy_func.print_and_log("info", f"[{ext.cog_name}] Created queue for '{ctx.guild.name}'.")
+            goldy_cache.main_cache_object["goldy_music"][ctx.guild.id] = {}
+            goldy_cache.main_cache_object["goldy_music"][ctx.guild.id]["song_queue"] = [] #Creates queue for guild if there isn't already.
 
-        self.setup(client)
+    async def get(self): #Returns the actual song queue itself.
+        return goldy_cache.main_cache_object["goldy_music"][self.ctx.guild.id]["song_queue"]
 
-    def setup(self, client): #Create a queue for the guild.
-        for guild in client.guilds:
-            self.song_queue[guild.id] = []
+    async def add(self, song_object:song): #Adds a song to queue.
+        song = song_object
+        goldy_cache.main_cache_object["goldy_music"][song.ctx.guild.id]["song_queue"].append(song)
 
-    async def check(self, ctx): #Checks queue if there's anything else to play.
-        if len(self.song_queue[ctx.guild.id]) > 0:
-            await player.play_song(ctx, self.song_queue[ctx.guild.id][0])
-            self.song_queue.pop(0)
+    async def remove(self, song_object:song): #Remove a specific song.
+        song = song_object
+        goldy_cache.main_cache_object["goldy_music"][song.ctx.guild.id]["song_queue"].remove(song)
+        #Work in progress
 
-class youtube():
+    async def remove_first(self): #Removes first song in the queue.
+        goldy_cache.main_cache_object["goldy_music"][self.ctx.guild.id]["song_queue"].pop(0)
 
-    @staticmethod
-    async def search(ctx, client, amount, song, get_url=False):
-        async with ctx.typing():
-            try:
-                info = youtube_dl.YoutubeDL({"format":"bestaudio", "quiet":False}).extract_info(f"ytsearch{amount}:{song}", 
-                download=False, ie_key="YoutubeSearch")
+    @property
+    def length(self): #Returns amount songs left in queue.
+        return len(goldy_cache.main_cache_object["goldy_music"][self.ctx.guild.id]["song_queue"])
 
-                if len(info["entries"]) == 0:
-                    return None
-                
-                if get_url == True:
-                    url_list = []
-                    for entry in info["entries"]:
-                        url_list.append(entry["webpage_url"])
-
-                    return url_list
-
-                else:
-                    return info
-
-            except Exception as e:
-                await goldy_utility.goldy.log_error(ctx, client, e, None)
-
-class player():
-    def __init__(self, client):
+class player: #Goldy Bot player class, an instence of this is made whenever music is needed to be played in a vc.
+    def __init__(self, ctx, client, voice_client, queue:queue):
+        self.ctx = ctx
         self.client = client
-        pass
+        self.voice_client = voice_client #The Discord voice connection.
+        self.queue = queue #The queue of songs to play.
 
-    class checks():
-
-        @staticmethod
-        async def is_playing(ctx): #Checks if a song is already playing.
-            if ctx.voice_client.is_playing():
-                return True
-            else:
-                return False
-
-    async def play_next(self, ctx):
-        q = queue(self.client)
-        if len(q.song_queue[ctx.guild.id]) > 1:
-            self.song_queue.pop(0)
-            await self.play_song(ctx, q.song_queue[ctx.guild.id][0])
-
-    async def resume_song(self, ctx):
-        await goldy.join_vc(ctx)
-        ctx.voice_client.resume()
-
-    async def play_song(self, ctx, song_url):
-        url = pafy.new(song_url).getbestaudio().url
-        q = queue(self.client)
+        self.checks = self._checks(voice_client) #Checks class
+        
         try:
-            await ctx.voice_client.play(nextcord.PCMVolumeTransformer(nextcord.FFmpegPCMAudio(url)), after=lambda e: self.client.loop.create_task(self.play_next(ctx)))
-        except TypeError as e:
-            pass
-        except ClientException:
-            q.song_queue[ctx.guild.id].append(song_url)
+            goldy_cache.main_cache_object["goldy_music"][ctx.guild.id]["player_instance"]
+        except KeyError:
+            goldy_cache.main_cache_object["goldy_music"][ctx.guild.id]["player_instance"] = self
+
+        if not voice_client.is_playing() == True: #Unpauses music if paused.
+            if voice_client.is_paused():
+                voice_client.resume()
+
+    class _checks():
+        def __init__(self, voice_client):
+            self.voice_client = voice_client
+
+        async def is_playing(self): #Checks if a song is already playing.
+            if self.voice_client.is_playing(): return True
+            else: return False
+
+        async def is_paused(self): #Checks if a song is already playing.
+            if self.voice_client.is_paused(): return True
+            else: return False
+
+    async def play(self, stream_object): #Play stream object.
+        try:
+            if not await self.checks.is_paused(): #Checking if any song is currently playing.
+                loop = asyncio.get_event_loop()
+                self.ctx.voice_client.play(nextcord.PCMVolumeTransformer(nextcord.FFmpegPCMAudio(stream_object.url, executable="./ffmpeg.exe")), 
+                after=lambda e: loop.create_task(self.next()))
+                self.ctx.voice_client.source.volume = 0.13 #Default Volume
+                goldy_func.print_and_log(None, f"[{ext.cog_name.upper()}] Playing '{stream_object.title}' in '{self.ctx.voice_client.channel.name}'.")
+            else:
+                await self.resume()
         except Exception as e:
-            await goldy_utility.goldy.log_error(ctx, self.client, e, None)
+            await goldy_error.log(self.ctx, self.client, e, None)
             return False
 
-        ctx.voice_client.source.volume = 0.2
+    async def pause(self):
+        self.ctx.voice_client.pause()
 
-    
+    async def resume(self):
+        self.ctx.voice_client.resume()
+
+    async def next(self): #Remove last song and plays next song in queue.
+        last_song_object = (await self.queue.get())[0]
+        await last_song_object.np_msg.edit(embed=await ext.music.embed.crossed_out_playing(last_song_object)) #Crossout last now playing embed.
+        await self.queue.remove_first() #Removes last song.
+
+        if self.queue.length >= 1: #If there is 1 or more songs in queue, play them.
+            next_song_object = (await self.queue.get())[0]
+            await self.play(next_song_object.stream_object)
+            msg = await self.ctx.send(embed=await ext.music.embed.playing(next_song_object))
+            setattr(next_song_object, "np_msg", msg)
+            
+
+    @property
+    def old_instance(self): #Returns the previous instance of the player.
+        return goldy_cache.main_cache_object["goldy_music"][self.ctx.guild.id]["player_instance"]
+
+    @property
+    async def song_object(self): #Returns the song object for the song currently playing.
+        return (await self.queue.get())[0]
