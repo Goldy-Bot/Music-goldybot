@@ -13,7 +13,7 @@ A open source Music extenstion for Goldy Bot which includes Goldy Music and Gold
 - [x] ``!pause``**: Pauses the song.**
 - [x] ``!resume``**: Contiunes the song.**
 - [x] ``!join``**: Joins channel.**
-- [x] ``!queue``**: Shows queue.**
+- [ ] ``!queue``**: Shows queue.**
 - [ ] *``More Coming Soon...``*
 
 ## Read This Before Use!
