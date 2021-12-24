@@ -6,12 +6,15 @@ from nextcord.ext import commands
 import asyncio
 import importlib
 
-from src.goldy_func import *
-from src.goldy_utility import *
+from src import goldy_error, goldy_func, goldy_cache, goldy_utility
+from src.utility import cmds, members
 import src.utility.msg as msg
+import settings
 
 #Importing cog packages.
-from .music_cog import audio, config, msg as music_msg
+from .music_cog import config, msg as music_msg
+from .music_cog.audio import goldy, player, queue
+from .music_cog.platforms import youtube
 
 cog_name = "music"
 ver = "1.0[alpha]"
@@ -24,69 +27,84 @@ class music(commands.Cog, name="🧡🎻Music"):
         self.version = ver
         self.help_command_index = None #The position this cog will be placed in the help command.
 
-        importlib.reload(audio)
-        importlib.reload(config)
         importlib.reload(msg)
+        importlib.reload(queue)
+        importlib.reload(goldy)
+        importlib.reload(config)
+        importlib.reload(player)
+        importlib.reload(music_msg)
 
     @commands.command(aliases=["connect", "con"], description="Join and play song right away.", cmd_usage="!nick {nick_name}")
     async def join(self, ctx):
-        if await can_the_command_run(ctx, cog_name) == True:
-            await audio.goldy.join_vc(ctx)
+        if await cmds.can_the_command_run(ctx, cog_name) == True:
+            await goldy.join_vc(ctx)
 
     @join.error
     async def command_error(self, ctx, error):
         if isinstance(error, commands.CommandOnCooldown):
             await ctx.author.send(msg.error.cooldown.format(datetime.timedelta(seconds=round(error.retry_after))))
         else:
-            await goldy.log_error(ctx, self.client, error, f"{cog_name}.join")
+            await goldy_error.log(ctx, self.client, error, f"{cog_name}.join")
 
     @commands.command()
     async def play(self, ctx, *, song=None):
-        if await can_the_command_run(ctx, cog_name) == True:
-            await audio.goldy.join_vc(ctx)
-            song_queue = audio.queue(ctx)
-            player = audio.player(ctx, self.client, ctx.voice_client, song_queue)
+        if await cmds.can_the_command_run(ctx, cog_name) == True:
+            if await members.checks.in_vc(ctx): #If member in vc.
+                await goldy.join_vc(ctx)
+                song_queue:queue.queue = await queue.get(ctx)
+                player_:player.player = await player.get(ctx, self.client, ctx.voice_client, song_queue)
 
-            if not song == None:
-                url = await audio.youtube.search(ctx, self.client, song)
-                stream_object = await audio.youtube.stream(ctx, self.client, url).create()
-                song_object = audio.song(ctx, url, stream_object)
+                if not song == None:
+                    url = await youtube.search(ctx, self.client, song)
+                    stream_object = await youtube.stream(ctx, self.client, url).create()
+                    song_object = queue.song(ctx, url, stream_object)
 
-                await song_queue.add(song_object) #Adds song to guild's music queue.
+                    await song_queue.add(song_object) #Adds song to guild's music queue.
 
-                if song_queue.length > 1:
-                    embed = await music.embed.added_to_queue(song_object)
-                    await ctx.send(embed=embed)
-                    return True
-                else: 
-                    #Plays song now.
-                    await player.play(stream_object)
-                    message = await ctx.send(embed=await music.embed.playing(song_object))
-                    setattr(song_object, "np_msg", message)
-                    return True
-            
-            else:
-                if song_queue.length >= 1:
-                    if await (player.old_instance).checks.is_playing():
-                        message = await ctx.send(embed=await music.embed.playing(await (player.old_instance).song_object))
-                        setattr(await (player.old_instance).song_object, "np_msg", message)
+                    if song_queue.length > 1:
+                        embed = await music.embed.added_to_queue(song_object)
+                        await ctx.send(embed=embed)
                         return True
+                    else: 
+                        #Plays song now.
+                        await player_.play(stream_object)
+                        message = await ctx.send(embed=await music.embed.playing(song_object))
+                        setattr(song_object, "np_msg", message)
+                        return True
+                
+                else:
+                    if song_queue.length >= 1:
+                        if not await (player_.old_instance).checks.is_playing():
+                            message = await ctx.send(embed=await music.embed.playing(await (player_.old_instance).song_object))
+                            setattr(await (player_.old_instance).song_object, "np_msg", message)
+                            return True
 
-            await ctx.send(msg.help.command_usage.format(ctx.author.mention, "!play {song name/link}"))
+                await ctx.send(msg.help.command_usage.format(ctx.author.mention, "!play {song name/link}"))
+
+            else:
+                if await goldy.checks.in_vc(ctx):
+                    if ctx.voice_client.is_playing():
+                        player_:player.player = goldy_cache.main_cache_object["goldy_music"][ctx.guild.id]["player_instance"]
+                        await ctx.send(music_msg.error.another_vc.format(ctx.author.mention, player_.voice_client.channel.mention))
+                        return False
+
+                else:
+                    await ctx.send(music_msg.error.not_connected_to_vc.format(ctx.author.mention))
+                    return False
 
     @play.error
     async def command_error(self, ctx, error):
         if isinstance(error, commands.CommandOnCooldown):
             await ctx.author.send(msg.error.cooldown.format(datetime.timedelta(seconds=round(error.retry_after))))
         else:
-            await goldy.log_error(ctx, self.client, error, f"{cog_name}.play")
+            await goldy_error.log(ctx, self.client, error, f"{cog_name}.play")
 
     @commands.command()
     async def pause(self, ctx):
-        if await can_the_command_run(ctx, cog_name) == True:
+        if await cmds.can_the_command_run(ctx, cog_name) == True:
             try:
-                player = goldy_cache.main_cache_object["goldy_music"][ctx.guild.id]["player_instance"]
-                await player.pause()
+                player_:player.player = goldy_cache.main_cache_object["goldy_music"][ctx.guild.id]["player_instance"]
+                await player_.pause()
                 embed = await music.embed.paused(ctx)
                 await ctx.send(embed=embed)
             except KeyError:
@@ -97,19 +115,75 @@ class music(commands.Cog, name="🧡🎻Music"):
         if isinstance(error, commands.CommandOnCooldown):
             await ctx.author.send(msg.error.cooldown.format(datetime.timedelta(seconds=round(error.retry_after))))
         else:
-            await goldy.log_error(ctx, self.client, error, f"{cog_name}.pause")
+            await goldy_error.log(ctx, self.client, error, f"{cog_name}.pause")
+
+    @commands.command()
+    async def skip(self, ctx):
+        if await cmds.can_the_command_run(ctx, cog_name) == True:
+            try:
+                player_:player.player = goldy_cache.main_cache_object["goldy_music"][ctx.guild.id]["player_instance"]
+                embed = await music.embed.skipped(await player_.song_object)
+                await ctx.send(embed=embed)
+                await player_.skip()
+            except KeyError:
+                await ctx.send(music_msg.error.nothing_playing.format(ctx.author.mention)) #I'm not playing anything.
+
+    @skip.error
+    async def command_error(self, ctx, error):
+        if isinstance(error, commands.CommandOnCooldown):
+            await ctx.author.send(msg.error.cooldown.format(datetime.timedelta(seconds=round(error.retry_after))))
+        else:
+            await goldy_error.log(ctx, self.client, error, f"{cog_name}.skip")
+
+    @commands.command()
+    async def queue(self, ctx, option=None, song_num:int=None):
+        if await cmds.can_the_command_run(ctx, cog_name) == True:
+            if option == None:
+                try:
+                    song_queue:queue.queue = await queue.get(ctx)
+                    embed = await music.embed._queue(ctx, self.client, await song_queue.get())
+                    await ctx.send(embed=embed)
+                except IndexError:
+                    await ctx.send(music_msg.error.nothing_playing.format(ctx.author.mention)) #I'm not playing anything.
+
+                except Exception:
+                    await goldy_error.log(ctx, self.client)
+            
+            if not option == None:
+                if option.lower() == "remove":
+                    if not song_num == None:
+                        if not song_num <= 1:
+                            song_queue:queue.queue = await queue.get(ctx)
+                            (x, song_object) = await song_queue.remove.by_queue_num(song_num)
+                            embed = await music.embed.queue_remove(song_object)
+                            await ctx.send(embed=embed)
+                        else:
+                            embed = await music.embed.queue_song_is_playing(ctx)
+                            await ctx.send(embed=embed)
+                        return True
+                        
+                    else:
+                        await ctx.send(msg.help.command_usage.format(ctx.author.mention, "!queue remove {song queue number}"))
+                        return
+
+    @queue.error
+    async def command_error(self, ctx, error):
+        if isinstance(error, commands.CommandOnCooldown):
+            await ctx.author.send(msg.error.cooldown.format(datetime.timedelta(seconds=round(error.retry_after))))
+        else:
+            await goldy_error.log(ctx, self.client, error, f"{cog_name}.queue")
 
     @commands.command()
     async def leave(self, ctx):
-        if await can_the_command_run(ctx, cog_name) == True:
-            await audio.goldy.leave_vc(ctx)
+        if await cmds.can_the_command_run(ctx, cog_name) == True:
+            await goldy.leave_vc(ctx)
 
     @leave.error
     async def command_error(self, ctx, error):
         if isinstance(error, commands.CommandOnCooldown):
             await ctx.author.send(msg.error.cooldown.format(datetime.timedelta(seconds=round(error.retry_after))))
         else:
-            await goldy.log_error(ctx, self.client, error, f"{cog_name}.leave")
+            await goldy_error.log(ctx, self.client, error, f"{cog_name}.leave")
 
     class embed():
         @staticmethod
@@ -118,27 +192,27 @@ class music(commands.Cog, name="🧡🎻Music"):
             return embed
 
         @staticmethod
-        async def added_to_queue(song_object:audio.song):
+        async def added_to_queue(song_object:queue.song):
             embed = await music.embed.create(title=music_msg.add_to_queue.embed.title, 
-            description=music_msg.add_to_queue.embed.des.format(song_object.name, song_object.ctx.author.mention, song_object.duration.formated), 
+            description=music_msg.add_to_queue.embed.des.format(song_object.name, song_object.ctx.author.mention, song_object.duration.formated, song_object.bitrate), 
             colour=settings.GREY)
             embed.set_footer(text=music_msg.add_to_queue.embed.footer.format(song_object.platform.name, music_msg.footer.type_1.format(ver)), 
             icon_url=song_object.platform.icon)
             return embed
 
         @staticmethod
-        async def playing(song_object:audio.song):
+        async def playing(song_object:queue.song):
             embed = await music.embed.create(title=music_msg.playing.embed.title, 
-            description=music_msg.playing.embed.des.format(song_object.name, song_object.ctx.author.mention, song_object.duration.formated), 
+            description=music_msg.playing.embed.des.format(song_object.name, song_object.ctx.author.mention, song_object.duration.formated, song_object.bitrate), 
             colour=settings.AKI_BLUE)
             embed.set_footer(text=music_msg.playing.embed.footer.format(song_object.platform.name, music_msg.footer.type_1.format(ver)), 
             icon_url=song_object.platform.icon)
             return embed
 
         @staticmethod
-        async def crossed_out_playing(song_object:audio.song):
+        async def crossed_out_playing(song_object:queue.song):
             embed = await music.embed.create(title=music_msg.playing.crossed_out_embed.title, 
-            description=music_msg.playing.crossed_out_embed.des.format(song_object.name, song_object.ctx.author.mention, song_object.duration.formated), 
+            description=music_msg.playing.crossed_out_embed.des.format(song_object.name, song_object.ctx.author.mention, song_object.duration.formated, song_object.bitrate), 
             colour=settings.AKI_BLUE)
             embed.set_footer(text=music_msg.playing.crossed_out_embed.footer.format(song_object.platform.name, music_msg.footer.type_1.format(ver)), 
             icon_url=song_object.platform.icon)
@@ -149,6 +223,46 @@ class music(commands.Cog, name="🧡🎻Music"):
             embed = await music.embed.create(title=music_msg.paused.embed.title, description=music_msg.paused.embed.des.format(ctx.author.mention), colour=settings.BLUE)
             embed.set_footer(text=f"{music_msg.footer.type_1.format(ver)}")
             return embed
+
+        @staticmethod
+        async def skipped(song_object:queue.song):
+            embed = await music.embed.create(title=music_msg.skipped.embed.title, description=music_msg.skipped.embed.des.format(song_object.name), colour=settings.BLUE)
+            embed.set_footer(text=f"{music_msg.footer.type_1.format(ver)}")
+            return embed
+
+        @staticmethod
+        async def _queue(ctx, client, song_queue:list):
+            song:queue.song
+            embed_context = ""
+            num = 0
+            for song in song_queue:
+                num += 1
+                embed_context += f"• ``{num}``┃``{song.short_name}`` **__Req By {song.ctx.author.mention}__**\n"
+
+            embed = await music.embed.create(title=music_msg.queue.embed.title, description=embed_context, colour=settings.GREY)
+            
+            embed.add_field(name="**▶️ Now Playing:**", value=f"``{song_queue[0].name}``", inline=True)
+
+            player_:player.player = goldy_cache.main_cache_object["goldy_music"][ctx.guild.id]["player_instance"]
+            embed.add_field(name="**🔊 Playing in VC:**", value=f"{player_.voice_client.channel.mention}", inline=True)
+
+            embed.set_thumbnail(url=await goldy_utility.servers.get_icon(ctx, client))
+            embed.set_footer(text=f"{music_msg.footer.type_1.format(ver)}")
+
+            return embed
+
+        @staticmethod
+        async def queue_remove(song_object:queue.song):
+            embed = await music.embed.create(title=music_msg.queue_remove.embed.title, description=music_msg.queue_remove.embed.des.format(song_object.name), colour=settings.RED)
+            embed.set_footer(text=f"{music_msg.footer.type_1.format(ver)}")
+            return embed
+
+        @staticmethod
+        async def queue_song_is_playing(ctx):
+            embed = await music.embed.create(title=music_msg.queue_song_is_playing.embed.title, description=music_msg.queue_song_is_playing.embed.des.format(ctx.author.mention), colour=settings.AKI_ORANGE)
+            embed.set_footer(text=f"{music_msg.footer.type_1.format(ver)}")
+            return embed
+
 
 
 def setup(client):

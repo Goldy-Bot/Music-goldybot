@@ -44,7 +44,7 @@ class stream():
         self.loop = asyncio.get_event_loop()
 
         self.stream_object = self.loop.create_task(self.create()) #Create stream object for song.
-        goldy_func.print_and_log("info_2", f"[{ext.cog_name}: {platform}] Stream created for '{song_url}'.")
+        goldy_func.print_and_log("info_2", f"[{ext.cog_name.upper()}: {platform}] Stream created for '{song_url}'.")
 
     async def create(self): #Get's YouTube audio stream object.
         try:
