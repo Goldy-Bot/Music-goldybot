@@ -1,3 +1,4 @@
+from logging import exception
 from src import goldy_cache, goldy_func, goldy_error
 
 from ... import music as ext
@@ -6,6 +7,7 @@ class song(): #Class that creates song object.
     def __init__(self, ctx, url, stream_object):
         self.ctx = ctx
         self.url = url
+        self.playlist = stream_object.playlist
         self.platform = stream_object.platform
         self.name = stream_object.title
         self.short_name = self.name
@@ -14,13 +16,14 @@ class song(): #Class that creates song object.
         self.bitrate = stream_object.bitrate
         self.stream_object = stream_object
 
-        if len(self.name) > 45:
+        if len(self.name) > 36:
             self.short_name = self.name[:23] + "..."
 
 class queue():
     def __init__(self, ctx):
         self.ctx = ctx
         self.remove = self._remove(ctx) #Remove class
+        self.song:song = song #Song class
         try: #Test to see if cache exists.
             goldy_cache.main_cache_object["goldy_music"][ctx.guild.id]
             goldy_cache.main_cache_object["goldy_music"][ctx.guild.id]["song_queue"]
@@ -33,9 +36,18 @@ class queue():
         return goldy_cache.main_cache_object["goldy_music"][self.ctx.guild.id]["song_queue"]
 
     async def add(self, song_object:song): #Adds a song to queue.
-        song = song_object
-        goldy_cache.main_cache_object["goldy_music"][song.ctx.guild.id]["song_queue"].append(song)
-        return True
+        (is_playlist, playlist) = song_object.playlist
+        if is_playlist == True:
+            for stream_object in playlist:
+                song_object_:ext.queue.song = self.song(song_object.ctx, stream_object.url, stream_object)
+                goldy_cache.main_cache_object["goldy_music"][song_object_.ctx.guild.id]["song_queue"].append(song_object_)
+                
+            return "playlist"
+        
+        else:
+            song = song_object
+            goldy_cache.main_cache_object["goldy_music"][song.ctx.guild.id]["song_queue"].append(song)
+            return "song"
     
     class _remove(): #Class with all remove methods.
         def __init__(self, ctx):
@@ -65,6 +77,19 @@ class queue():
     async def remove_first(self): #Removes first song in the queue.
         goldy_cache.main_cache_object["goldy_music"][self.ctx.guild.id]["song_queue"].pop(0)
         goldy_func.print_and_log(None, f"[{ext.cog_name.upper()}] Removed first song from '{self.ctx.guild.name}'s queue.")
+
+    async def remove_all(self): #Removes all songs from the queue except the one currently playing.
+        try:
+            song_queue:list = (self.get())[1:]
+            song:ext.queue.song
+            
+            for song in song_queue:
+                goldy_cache.main_cache_object["goldy_music"][self.ctx.guild.id]["song_queue"].pop(1)
+                goldy_func.print_and_log(None, f"[{ext.cog_name.upper()}] Removed '{song.name}' from '{song.ctx.guild.name}'s queue.")
+
+            return True
+        except Exception:
+            await goldy_error.log(self.ctx)
 
     @property
     def length(self): #Returns amount songs left in queue.

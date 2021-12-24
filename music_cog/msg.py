@@ -42,6 +42,18 @@ class add_to_queue():
 
         footer = "Will stream from {}  •  {}"
 
+class add_to_queue_playlist():
+    class embed():
+        title = "**➕📜 Playlist Added to Queue**"
+
+        des = """
+        **``{}`` songs added to queue.**
+
+        **• Added by {}**
+        """
+
+        footer = "Will stream from {}  •  {}"
+
 class paused():
     class embed():
         title = "**⏸️ Paused**"
@@ -76,4 +88,12 @@ class queue_song_is_playing():
 
         des = """
         **{}, this song can not be removed from the queue, as it's currently being played. Use the ``!skip`` command instead.**
+        """
+
+class clear():
+    class embed():
+        title = "**🤍🎻 Cleared Queue**"
+
+        des = """
+        **{}, all songs removed from queue.**
         """

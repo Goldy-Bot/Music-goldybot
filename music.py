@@ -59,17 +59,24 @@ class music(commands.Cog, name="🧡🎻Music"):
                     stream_object = await youtube.stream(ctx, self.client, url).create()
                     song_object = queue.song(ctx, url, stream_object)
 
-                    await song_queue.add(song_object) #Adds song to guild's music queue.
+                    type = await song_queue.add(song_object) #Adds song to guild's music queue.
 
                     if song_queue.length > 1:
-                        embed = await music.embed.added_to_queue(song_object)
-                        await ctx.send(embed=embed)
-                        return True
+                        if type == "song":
+                            embed = await music.embed.added_to_queue(song_object)
+                            await ctx.send(embed=embed)
+                            return True
+
+                        if type == "playlist":  
+                            (x, playlist) = song_object.playlist
+                            embed = await music.embed.added_to_queue_playlist(playlist, song_object)
+                            await ctx.send(embed=embed)
+                            return True
                     else: 
                         #Plays song now.
-                        await player_.play(stream_object)
                         message = await ctx.send(embed=await music.embed.playing(song_object))
                         setattr(song_object, "np_msg", message)
+                        await player_.play(stream_object)
                         return True
                 
                 else:
@@ -136,7 +143,23 @@ class music(commands.Cog, name="🧡🎻Music"):
             await goldy_error.log(ctx, self.client, error, f"{cog_name}.skip")
 
     @commands.command()
-    async def queue(self, ctx, option=None, song_num:int=None):
+    async def clear(self, ctx):
+        if await cmds.can_the_command_run(ctx, cog_name) == True:
+            song_queue:queue.queue = await queue.get(ctx)
+            if await song_queue.remove_all():
+                embed = await music.embed.clear(ctx)
+                await ctx.send(embed=embed)
+
+    @clear.error
+    async def command_error(self, ctx, error):
+        if isinstance(error, commands.CommandOnCooldown):
+            await ctx.author.send(msg.error.cooldown.format(datetime.timedelta(seconds=round(error.retry_after))))
+        else:
+            await goldy_error.log(ctx, self.client, error, f"{cog_name}.clear")
+
+
+    @commands.command()
+    async def queue(self, ctx, option=None, song_num_or_name=None):
         if await cmds.can_the_command_run(ctx, cog_name) == True:
             if option == None:
                 try:
@@ -151,20 +174,22 @@ class music(commands.Cog, name="🧡🎻Music"):
             
             if not option == None:
                 if option.lower() == "remove":
-                    if not song_num == None:
-                        if not song_num <= 1:
+                    if not song_num_or_name == None:
+                        if not int(song_num_or_name) <= 1:
                             song_queue:queue.queue = await queue.get(ctx)
-                            (x, song_object) = await song_queue.remove.by_queue_num(song_num)
+                            (x, song_object) = await song_queue.remove.by_queue_num(int(song_num_or_name))
                             embed = await music.embed.queue_remove(song_object)
                             await ctx.send(embed=embed)
                         else:
                             embed = await music.embed.queue_song_is_playing(ctx)
                             await ctx.send(embed=embed)
                         return True
-                        
                     else:
                         await ctx.send(msg.help.command_usage.format(ctx.author.mention, "!queue remove {song queue number}"))
                         return
+
+                if option.lower() == "clear":
+                    await music.clear(ctx)
 
     @queue.error
     async def command_error(self, ctx, error):
@@ -201,6 +226,15 @@ class music(commands.Cog, name="🧡🎻Music"):
             return embed
 
         @staticmethod
+        async def added_to_queue_playlist(playlist, song_object:queue.song):
+            embed = await music.embed.create(title=music_msg.add_to_queue_playlist.embed.title, 
+            description=music_msg.add_to_queue_playlist.embed.des.format(len(playlist), song_object.ctx.author.mention), 
+            colour=settings.YELLOW)
+            embed.set_footer(text=music_msg.add_to_queue.embed.footer.format(song_object.platform.name, music_msg.footer.type_1.format(ver)), 
+            icon_url=song_object.platform.icon)
+            return embed
+
+        @staticmethod
         async def playing(song_object:queue.song):
             embed = await music.embed.create(title=music_msg.playing.embed.title, 
             description=music_msg.playing.embed.des.format(song_object.name, song_object.ctx.author.mention, song_object.duration.formated, song_object.bitrate), 
@@ -226,7 +260,7 @@ class music(commands.Cog, name="🧡🎻Music"):
 
         @staticmethod
         async def skipped(song_object:queue.song):
-            embed = await music.embed.create(title=music_msg.skipped.embed.title, description=music_msg.skipped.embed.des.format(song_object.name), colour=settings.BLUE)
+            embed = await music.embed.create(title=music_msg.skipped.embed.title, description=music_msg.skipped.embed.des.format(song_object.short_name), colour=settings.BLUE)
             embed.set_footer(text=f"{music_msg.footer.type_1.format(ver)}")
             return embed
 
@@ -263,7 +297,11 @@ class music(commands.Cog, name="🧡🎻Music"):
             embed.set_footer(text=f"{music_msg.footer.type_1.format(ver)}")
             return embed
 
-
+        @staticmethod
+        async def clear(ctx):
+            embed = await music.embed.create(title=music_msg.clear.embed.title, description=music_msg.clear.embed.des.format(ctx.author.mention), colour=settings.WHITE)
+            embed.set_footer(text=f"{music_msg.footer.type_1.format(ver)}")
+            return embed
 
 def setup(client):
     client.add_cog(music(client))
