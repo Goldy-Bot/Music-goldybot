@@ -7,7 +7,6 @@ class song(): #Class that creates song object.
     def __init__(self, ctx, url, stream_object):
         self.ctx = ctx
         self.url = url
-        self.playlist = stream_object.playlist
         self.platform = stream_object.platform
         self.name = stream_object.title
         self.short_name = self.name
@@ -18,6 +17,17 @@ class song(): #Class that creates song object.
 
         if len(self.name) > 36:
             self.short_name = self.name[:23] + "..."
+
+class playlist(): #Class that creates playlist object.
+    def __init__(self, ctx, url, song_urls:list, stream_objects:list):
+        self.ctx = ctx
+        self.url = url
+        self.songs:list = []
+
+        count = 0
+        for stream_object in stream_objects:
+            self.songs.append(ext.queue.song(ctx, song_urls[count], stream_object))
+            count += 1
 
 class queue():
     def __init__(self, ctx):
@@ -35,19 +45,19 @@ class queue():
     async def get(self): #Returns the actual song queue itself.
         return goldy_cache.main_cache_object["goldy_music"][self.ctx.guild.id]["song_queue"]
 
-    async def add(self, song_object:song): #Adds a song to queue.
-        (is_playlist, playlist) = song_object.playlist
-        if is_playlist == True:
-            for stream_object in playlist:
-                song_object_:ext.queue.song = self.song(song_object.ctx, stream_object.url, stream_object)
-                goldy_cache.main_cache_object["goldy_music"][song_object_.ctx.guild.id]["song_queue"].append(song_object_)
-                
-            return "playlist"
+    async def add(self, song_object:song=None, playlist_object:playlist=None): #Adds a song or playlist to queue.
         
-        else:
+        if not playlist_object == None: #Playlist
+            for song in playlist_object.songs:
+                goldy_cache.main_cache_object["goldy_music"][song.ctx.guild.id]["song_queue"].append(song)
+            return True
+        
+        if not song_object == None: #Single Song
             song = song_object
             goldy_cache.main_cache_object["goldy_music"][song.ctx.guild.id]["song_queue"].append(song)
-            return "song"
+            return True
+
+        return False
     
     class _remove(): #Class with all remove methods.
         def __init__(self, ctx):

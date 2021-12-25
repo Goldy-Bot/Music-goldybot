@@ -72,7 +72,7 @@ class stream():
                         #It's a playlist.
                         count = 0
                         stream_object_list = []
-                        first_song_stream_object = None
+                        url_list = []
                         playlist = pytube.Playlist(self.song_url)
                         
                         async with self.ctx.typing():
@@ -91,14 +91,11 @@ class stream():
                                 setattr(stream_object, "thumbnail", video.bigthumb)
                                 setattr(stream_object, "playlist", (False, None))
                                 
-                                if count > 1:
-                                    stream_object_list.append(stream_object)
-                                else:
-                                    first_song_stream_object = stream_object
+                                stream_object_list.append(stream_object)
+                                url_list.append(song)
 
-                        setattr(first_song_stream_object, "playlist", (True, stream_object_list)) #Tells queue that this is a playlist and it should also queue the other songs in the 'stream object's playlist'.
                         goldy_func.print_and_log("info_2", f"[{ext.cog_name.upper()}: {platform}] Streams created for all songs in the playlist '{self.song_url}'.")
-                        return first_song_stream_object
+                        return url_list, stream_object_list
             else:
                 goldy_func.print_and_log("warn", f"[{platform}] Url is '{self.song_url}'.")
                 return False

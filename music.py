@@ -49,55 +49,8 @@ class music(commands.Cog, name="🧡🎻Music"):
     @commands.command()
     async def play(self, ctx, *, song=None):
         if await cmds.can_the_command_run(ctx, cog_name) == True:
-            if await members.checks.in_vc(ctx): #If member in vc.
-                await goldy.join_vc(ctx)
-                song_queue:queue.queue = await queue.get(ctx)
-                player_:player.player = await player.get(ctx, self.client, ctx.voice_client, song_queue)
-
-                if not song == None:
-                    url = await youtube.search(ctx, self.client, song)
-                    stream_object = await youtube.stream(ctx, self.client, url).create()
-                    song_object = queue.song(ctx, url, stream_object)
-
-                    type = await song_queue.add(song_object) #Adds song to guild's music queue.
-
-                    if song_queue.length > 1:
-                        if type == "song":
-                            embed = await music.embed.added_to_queue(song_object)
-                            await ctx.send(embed=embed)
-                            return True
-
-                        if type == "playlist":  
-                            (x, playlist) = song_object.playlist
-                            embed = await music.embed.added_to_queue_playlist(playlist, song_object)
-                            await ctx.send(embed=embed)
-                            return True
-                    else: 
-                        #Plays song now.
-                        message = await ctx.send(embed=await music.embed.playing(song_object))
-                        setattr(song_object, "np_msg", message)
-                        await player_.play(stream_object)
-                        return True
-                
-                else:
-                    if song_queue.length >= 1:
-                        if not await (player_.old_instance).checks.is_playing():
-                            message = await ctx.send(embed=await music.embed.playing(await (player_.old_instance).song_object))
-                            setattr(await (player_.old_instance).song_object, "np_msg", message)
-                            return True
-
+            if await goldy.play(ctx, self.client, song) == False:
                 await ctx.send(msg.help.command_usage.format(ctx.author.mention, "!play {song name/link}"))
-
-            else:
-                if await goldy.checks.in_vc(ctx):
-                    if ctx.voice_client.is_playing():
-                        player_:player.player = goldy_cache.main_cache_object["goldy_music"][ctx.guild.id]["player_instance"]
-                        await ctx.send(music_msg.error.another_vc.format(ctx.author.mention, player_.voice_client.channel.mention))
-                        return False
-
-                else:
-                    await ctx.send(music_msg.error.not_connected_to_vc.format(ctx.author.mention))
-                    return False
 
     @play.error
     async def command_error(self, ctx, error):
@@ -226,7 +179,8 @@ class music(commands.Cog, name="🧡🎻Music"):
             return embed
 
         @staticmethod
-        async def added_to_queue_playlist(playlist, song_object:queue.song):
+        async def added_to_queue_playlist(playlist):
+            song_object = playlist[0]
             embed = await music.embed.create(title=music_msg.add_to_queue_playlist.embed.title, 
             description=music_msg.add_to_queue_playlist.embed.des.format(len(playlist), song_object.ctx.author.mention), 
             colour=settings.YELLOW)
